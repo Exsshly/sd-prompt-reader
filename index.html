@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>sd Prompt Reader</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+
+        #container {
+            display: flex;
+            flex-direction: row;
+            width: 90%;
+            height: 90%;
+            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            background-color: #fff;
+        }
+
+        #imageContainer {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            border-right: 1px solid #ccc;
+            cursor: pointer;
+        }
+
+        #imageContainer img {
+            max-width: 100%;
+            max-height: 100%;
+            box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
+        }
+
+        #metadataContainer {
+            flex: 1.5;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        #rawMetadata {
+            flex-grow: 0;
+            margin-bottom: 20px;
+        }
+
+        #formattedMetadata {
+            flex-grow: 1;
+            overflow-y: auto;
+        }
+
+        #rawMetadata h2, #formattedMetadata h2 {
+            margin-top: 0;
+        }
+
+        #rawMetadata pre, #formattedMetadata div {
+            margin-top: 10px;
+            font-size: 16px;
+            font-family: Arial, sans-serif;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        #formattedMetadataHeader {
+            position: sticky;
+            top: 0;
+            background-color: white;
+            z-index: 1;
+            padding-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <label id="imageContainer" for="fileInput">
+            <img id="imagePreview" src="" alt="&emsp;Open Image">
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        </label>
+        <div id="metadataContainer">
+            <div id="rawMetadata">
+                <h2>PNG Info:</h2>
+                <pre id="rawMetadataContent"></pre>
+            </div>
+            <div id="formattedMetadata">
+                <div id="formattedMetadataHeader">
+                    <h2>Formatted Info:</h2>
+                </div>
+                <div id="formattedMetadataContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const arrayBuffer = e.target.result;
+                    const byteArray = new Uint8Array(arrayBuffer);
+                    displayMetadata(byteArray);
+                    document.getElementById('imagePreview').src = URL.createObjectURL(file);
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        function displayMetadata(byteArray) {
+            const rawMetadataContent = document.getElementById('rawMetadataContent');
+            const formattedMetadataContent = document.getElementById('formattedMetadataContent');
+            rawMetadataContent.innerHTML = '';
+            formattedMetadataContent.innerHTML = '';
+
+            const textChunks = findPNGTextChunks(byteArray);
+            if (textChunks.length > 0) {
+                textChunks.forEach(chunk => {
+                    rawMetadataContent.innerHTML += `${chunk.keyword}: ${chunk.text}\n\n`;
+                    formattedMetadataContent.innerHTML += formatMetadata(chunk.keyword, chunk.text);
+                });
+            } else {
+                rawMetadataContent.innerHTML += 'No text chunks found.';
+            }
+        }
+
+        function findPNGTextChunks(byteArray) {
+            const textChunks = [];
+            let offset = 8;
+
+            while (offset < byteArray.length) {
+                const length = byteArray[offset] << 24 | byteArray[offset + 1] << 16 | byteArray[offset + 2] << 8 | byteArray[offset + 3];
+                const type = String.fromCharCode(byteArray[offset + 4], byteArray[offset + 5], byteArray[offset + 6], byteArray[offset + 7]);
+
+                if (type === 'tEXt' || type === 'iTXt' || type === 'zTXt') {
+                    const data = byteArray.slice(offset + 8, offset + 8 + length);
+                    const keywordLength = data.indexOf(0);
+                    const keyword = new TextDecoder().decode(data.slice(0, keywordLength));
+                    const text = new TextDecoder().decode(data.slice(keywordLength + 1));
+                    textChunks.push({ keyword, text });
+                }
+
+                offset += 8 + length + 4;
+            }
+
+            return textChunks;
+        }
+
+        function formatMetadata(keyword, text) {
+            let formattedText = "";
+
+            const promptPattern = /(.*?)(?=Negative prompt:)/s;
+            const promptMatch = promptPattern.exec(text);
+            if (promptMatch) {
+                const promptValue = promptMatch[1].trim();
+                formattedText += `<p><strong>Prompt:</strong> ${promptValue}</p>`;
+            }
+
+            const negativePromptPattern = /Negative prompt: (.*?)(?=Steps:)/s;
+            const negativePromptMatch = negativePromptPattern.exec(text);
+            if (negativePromptMatch) {
+                const negativePromptValue = negativePromptMatch[1].trim();
+                formattedText += `<p><strong>Negative prompt:</strong> ${negativePromptValue}</p>`;
+            }
+
+            const restPattern = /(Steps:.*)/s;
+            const restMatch = restPattern.exec(text);
+            if (restMatch) {
+                const restText = restMatch[1];
+
+                const pattern = /(\w+(?: \w+)*): ([^,]+)(?:,|$)/g;
+                let match;
+
+                while ((match = pattern.exec(restText)) !== null) {
+                    const key = match[1].trim();
+                    const value = match[2].trim();
+                    formattedText += `<p><strong>${key}:</strong> ${value}</p>`;
+                }
+            }
+
+            return `<div>${formattedText}</div>`;
+        }
+    </script>
+</body>
+</html>
