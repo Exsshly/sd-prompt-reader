@@ -1,28 +1,51 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>sd Prompt Reader</title>
+    <title>Stable Diffusion Webui Reader</title>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+
         body {
-            font-family: Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #f0f0f0;
+            padding: 20px;
+            min-height: 100vh;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2em;
+            font-weight: 600;
+            color: #333;
+        }
+
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 1em;
+            color: #666;
         }
 
         #container {
             display: flex;
             flex-direction: row;
-            width: 90%;
-            height: 90%;
-            box-shadow: 0px 0px 10px rgba(0, 0, 0, 0.1);
+            max-width: 1200px;
+            margin: 0 auto;
             background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+            min-height: 75vh;
         }
 
         #imageContainer {
@@ -32,162 +55,1160 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            border-right: 1px solid #ccc;
+            border-right: 1px solid #e0e0e0;
             cursor: pointer;
+            transition: background-color 0.2s ease;
+        }
+
+        #imageContainer:hover {
+            background-color: #fafafa;
+        }
+
+        #imageContainer.dragover {
+            background-color: #f0f8ff;
+            border-right-color: #007acc;
+        }
+
+        #uploadArea {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            min-height: 180px;
+            border: 2px dashed #ccc;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        #uploadArea.has-image {
+            border: none;
+            min-height: auto;
+        }
+
+        #uploadArea:hover {
+            border-color: #007acc;
+            background-color: rgba(0, 122, 204, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 32px;
+            color: #999;
+            margin-bottom: 8px;
+        }
+
+        .upload-text {
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            line-height: 1.4;
         }
 
         #imageContainer img {
             max-width: 100%;
-            max-height: 100%;
-            box-shadow: 0px 0px 5px rgba(0, 0, 0, 0.1);
+            max-height: 65vh;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+        }
+
+        .image-info {
+            margin-top: 12px;
+            padding: 8px 12px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            width: 100%;
+            text-align: center;
+            font-size: 13px;
+            color: #666;
         }
 
         #metadataContainer {
             flex: 1.5;
             display: flex;
             flex-direction: column;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        .metadata-tabs {
+            display: flex;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 12px 16px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            color: #666;
+        }
+
+        .tab-button.active {
+            background-color: white;
+            color: #007acc;
+            border-bottom: 2px solid #007acc;
+        }
+
+        .tab-button:hover:not(.active) {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+
+        .tab-content {
+            flex: 1;
             padding: 20px;
             overflow-y: auto;
+            display: none;
         }
 
-        #rawMetadata {
-            flex-grow: 0;
-            margin-bottom: 20px;
+        .tab-content.active {
+            display: block;
         }
 
-        #formattedMetadata {
-            flex-grow: 1;
+        .metadata-section h2 {
+            margin: 0 0 16px 0;
+            color: #333;
+            font-size: 1.3em;
+            font-weight: 600;
+        }
+
+        #rawMetadataContent {
+            font-family: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #333;
+            background-color: #f8f9fa;
+            padding: 16px;
+            border-radius: 4px;
+            border: 1px solid #e9ecef;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            max-height: 60vh;
             overflow-y: auto;
         }
 
-        #rawMetadata h2, #formattedMetadata h2 {
-            margin-top: 0;
+        .metadata-item {
+            margin-bottom: 16px;
+            padding: 16px;
+            background-color: #fafafa;
+            border-radius: 6px;
+            border-left: 3px solid #007acc;
         }
 
-        #rawMetadata pre, #formattedMetadata div {
-            margin-top: 10px;
-            font-size: 16px;
-            font-family: Arial, sans-serif;
-            white-space: pre-wrap;
+        .metadata-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .metadata-label {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+            margin-bottom: 6px;
+            display: block;
+        }
+
+        .metadata-value {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.5;
             word-wrap: break-word;
         }
 
-        #formattedMetadataHeader {
-            position: sticky;
-            top: 0;
+        .metadata-value.prompt {
             background-color: white;
-            z-index: 1;
-            padding-top: 20px;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+
+        .metadata-value.negative-prompt {
+            background-color: #fff8e1;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #ffc107;
+        }
+
+        .metadata-value.lora {
+            background-color: #e8f5e8;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #28a745;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+        }
+
+        .metadata-value.extension {
+            background-color: #f3e5f5;
+            padding: 12px;
+            border-radius: 4px;
+            border: 1px solid #6f42c1;
+        }
+
+        .metadata-value.parameter {
+            font-weight: 500;
+            color: #007acc;
+        }
+
+        .copy-button {
+            background-color: #007acc;
+            color: white;
+            border: none;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 11px;
+            margin-left: 8px;
+            transition: background-color 0.2s ease;
+        }
+
+        .copy-button:hover {
+            background-color: #106ebe;
+        }
+
+        .copy-button.copied {
+            background-color: #28a745;
+        }
+
+        .show-details-button {
+            background-color: #6c757d;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-top: 16px;
+            transition: background-color 0.2s ease;
+        }
+
+        .show-details-button:hover {
+            background-color: #5a6268;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 5% auto;
+            padding: 0;
+            border-radius: 8px;
+            width: 90%;
+            max-width: 1000px;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h3 {
+            margin: 0;
+            color: #333;
+            font-size: 1.2em;
+        }
+
+        .close-button {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #666;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-button:hover {
+            color: #333;
+        }
+
+        .modal-body {
+            padding: 20px;
+            overflow-y: auto;
+            max-height: calc(80vh - 120px);
+        }
+
+        .detail-section {
+            margin-bottom: 24px;
+        }
+
+        .detail-section h4 {
+            margin: 0 0 12px 0;
+            color: #007acc;
+            font-size: 1.1em;
+            font-weight: 600;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 4px;
+        }
+
+        .detail-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .param-group {
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            padding: 20px;
+            border-left: 4px solid #007acc;
+        }
+
+        .param-group h4 {
+            margin: 0 0 20px 0;
+            color: #007acc;
+            font-size: 1.1em;
+            font-weight: 600;
+            border-bottom: 2px solid #007acc;
+            padding-bottom: 8px;
+        }
+
+        .param-item {
+            display: grid;
+            grid-template-columns: 200px 1fr;
+            gap: 16px;
+            margin-bottom: 16px;
+            padding: 16px;
+            background-color: white;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+            align-items: start;
+        }
+
+        .param-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .param-label {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+            word-wrap: break-word;
+        }
+
+        .param-value {
+            color: #555;
+            font-size: 14px;
+            line-height: 1.5;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            font-style: italic;
+            padding: 30px;
+        }
+
+        .error {
+            color: #dc3545;
+            background-color: #f8d7da;
+            padding: 12px;
+            border-radius: 4px;
+            border-left: 3px solid #dc3545;
+        }
+
+        .success {
+            color: #155724;
+            background-color: #d4edda;
+            padding: 12px;
+            border-radius: 4px;
+            border-left: 3px solid #28a745;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            #container {
+                flex-direction: column;
+                min-height: auto;
+            }
+            
+            #imageContainer {
+                border-right: none;
+                border-bottom: 1px solid #e0e0e0;
+            }
+            
+            .metadata-tabs {
+                flex-direction: column;
+            }
+            
+            .tab-button {
+                text-align: left;
+            }
         }
     </style>
 </head>
-<body>
+<body>    
     <div id="container">
-        <label id="imageContainer" for="fileInput">
-            <img id="imagePreview" src="" alt="&emsp;Open Image">
-            <input type="file" id="fileInput" accept="image/*" style="display: none;">
-        </label>
-        <div id="metadataContainer">
-            <div id="rawMetadata">
-                <h2>PNG Info:</h2>
-                <pre id="rawMetadataContent"></pre>
-            </div>
-            <div id="formattedMetadata">
-                <div id="formattedMetadataHeader">
-                    <h2>Formatted Info:</h2>
+        <div id="imageContainer">
+            <div id="uploadArea">
+                <div class="upload-icon">📷</div>
+                <div class="upload-text">
+                    <strong>Upload A Photo.</strong><br>
                 </div>
+            </div>
+            <img id="imagePreview" style="display: none;">
+            <div id="imageInfo" class="image-info" style="display: none;"></div>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
+        </div>
+        
+        <div id="metadataContainer">
+            <div class="metadata-tabs">
+                <button class="tab-button active" onclick="switchTab('formatted')">FormattedInfo</button>
+                <button class="tab-button" onclick="switchTab('raw')">RawInfo</button>
+            </div>
+            
+            <div id="formattedTab" class="tab-content active">
                 <div id="formattedMetadataContent"></div>
+            </div>
+            
+            <div id="rawTab" class="tab-content">
+                <div class="metadata-section">
+                    <h2>RawInfo</h2>
+                    <pre id="rawMetadataContent">nil</pre>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="detailModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>More</h3>
+                <button class="close-button" onclick="closeDetailModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modalBody">
             </div>
         </div>
     </div>
 
     <script>
-        document.getElementById('fileInput').addEventListener('change', function(event) {
+        let currentImageFile = null;
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            const fileInput = document.getElementById('fileInput');
+            const imageContainer = document.getElementById('imageContainer');
+            const uploadArea = document.getElementById('uploadArea');
+            
+            fileInput.addEventListener('change', handleFileSelect);
+            
+            imageContainer.addEventListener('click', function() {
+                fileInput.click();
+            });
+            
+            setupDragAndDrop();
+        });
+
+        function setupDragAndDrop() {
+            const imageContainer = document.getElementById('imageContainer');
+            const uploadArea = document.getElementById('uploadArea');
+            
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                imageContainer.addEventListener(eventName, preventDefaults, false);
+                document.body.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                imageContainer.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                imageContainer.addEventListener(eventName, unhighlight, false);
+            });
+            
+            imageContainer.addEventListener('drop', handleDrop, false);
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            function highlight() {
+                imageContainer.classList.add('dragover');
+            }
+            
+            function unhighlight() {
+                imageContainer.classList.remove('dragover');
+            }
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                
+                if (files.length > 0) {
+                    handleFile(files[0]);
+                }
+            }
+        }
+
+        function handleFileSelect(event) {
             const file = event.target.files[0];
             if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            if (!file.type.startsWith('image/')) {
+                return;
+            }
+            
+            currentImageFile = file;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
                     const arrayBuffer = e.target.result;
                     const byteArray = new Uint8Array(arrayBuffer);
+                    
+                    displayImage(file);
+                    
                     displayMetadata(byteArray);
-                    document.getElementById('imagePreview').src = URL.createObjectURL(file);
-                };
-                reader.readAsArrayBuffer(file);
+                } catch (error) {
+                    console.error('error:', error);
+                }
+            };
+            
+            reader.readAsArrayBuffer(file);
+        }
+
+        function displayImage(file) {
+            const imagePreview = document.getElementById('imagePreview');
+            const uploadArea = document.getElementById('uploadArea');
+            const imageInfo = document.getElementById('imageInfo');
+            
+            imagePreview.src = URL.createObjectURL(file);
+            imagePreview.style.display = 'block';
+            uploadArea.style.display = 'none';
+            uploadArea.classList.add('has-image');
+            
+            const fileSizeKB = (file.size / 1024).toFixed(2);
+            const fileSizeMB = (file.size / (1024 * 1024)).toFixed(2);
+            const sizeText = file.size > 1024 * 1024 ? `${fileSizeMB} MB` : `${fileSizeKB} KB`;
+            
+            imageInfo.innerHTML = `
+                <strong>${file.name}</strong><br>
+                FileSize: ${sizeText} | FileType: ${file.type}
+            `;
+            imageInfo.style.display = 'block';
+        }
+
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
+            
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            if (tabName === 'formatted') {
+                document.getElementById('formattedTab').classList.add('active');
+            } else {
+                document.getElementById('rawTab').classList.add('active');
             }
-        });
+        }
 
         function displayMetadata(byteArray) {
             const rawMetadataContent = document.getElementById('rawMetadataContent');
             const formattedMetadataContent = document.getElementById('formattedMetadataContent');
-            rawMetadataContent.innerHTML = '';
-            formattedMetadataContent.innerHTML = '';
-
-            const textChunks = findPNGTextChunks(byteArray);
-            if (textChunks.length > 0) {
-                textChunks.forEach(chunk => {
-                    rawMetadataContent.innerHTML += `${chunk.keyword}: ${chunk.text}\n\n`;
-                    formattedMetadataContent.innerHTML += formatMetadata(chunk.keyword, chunk.text);
-                });
-            } else {
-                rawMetadataContent.innerHTML += 'No text chunks found.';
+            
+            try {
+                const textChunks = findPNGTextChunks(byteArray);
+                
+                if (textChunks.length > 0) {
+                    let rawText = '';
+                    textChunks.forEach(chunk => {
+                        rawText += `${chunk.keyword}: ${chunk.text}\n\n`;
+                    });
+                    rawMetadataContent.textContent = rawText;
+                    
+                    let formattedHtml = '';
+                    let hasValidData = false;
+                    
+                    textChunks.forEach(chunk => {
+                        const formatted = formatMetadata(chunk.keyword, chunk.text);
+                        if (formatted.trim()) {
+                            formattedHtml += formatted;
+                            hasValidData = true;
+                        }
+                    });
+                    
+                    if (hasValidData) {
+                        formattedMetadataContent.innerHTML = formattedHtml;
+                    } else {
+                        formattedMetadataContent.innerHTML = '<div class="error">null info</div>';
+                    }
+                } else {
+                    rawMetadataContent.textContent = 'No text block data found.\n\nThis might be because:\n1. Image contains no metadata\n2. Image has been compressed or converted\n3. Image was not generated by Stable Diffusion WebUI';
+                    formattedMetadataContent.innerHTML = '<div class="error">No text block data found</div>';
+                }
+            } catch (error) {
+                console.error('error:', error);
+                const errorMsg = 'error: ' + error.message;
+                rawMetadataContent.textContent = errorMsg;
             }
         }
 
         function findPNGTextChunks(byteArray) {
             const textChunks = [];
-            let offset = 8;
-
-            while (offset < byteArray.length) {
-                const length = byteArray[offset] << 24 | byteArray[offset + 1] << 16 | byteArray[offset + 2] << 8 | byteArray[offset + 3];
-                const type = String.fromCharCode(byteArray[offset + 4], byteArray[offset + 5], byteArray[offset + 6], byteArray[offset + 7]);
-
-                if (type === 'tEXt' || type === 'iTXt' || type === 'zTXt') {
-                    const data = byteArray.slice(offset + 8, offset + 8 + length);
-                    const keywordLength = data.indexOf(0);
-                    const keyword = new TextDecoder().decode(data.slice(0, keywordLength));
-                    const text = new TextDecoder().decode(data.slice(keywordLength + 1));
-                    textChunks.push({ keyword, text });
-                }
-
-                offset += 8 + length + 4;
+            
+            if (byteArray.length < 8 || 
+                byteArray[0] !== 0x89 || byteArray[1] !== 0x50 || 
+                byteArray[2] !== 0x4E || byteArray[3] !== 0x47) {
+                throw new Error('error');
             }
-
+            
+            let offset = 8;
+            
+            while (offset < byteArray.length - 8) {
+                try {
+                    const length = (byteArray[offset] << 24) | 
+                                 (byteArray[offset + 1] << 16) | 
+                                 (byteArray[offset + 2] << 8) | 
+                                 byteArray[offset + 3];
+                    
+                    const type = String.fromCharCode(
+                        byteArray[offset + 4], 
+                        byteArray[offset + 5], 
+                        byteArray[offset + 6], 
+                        byteArray[offset + 7]
+                    );
+                    
+                    if (type === 'tEXt' || type === 'iTXt' || type === 'zTXt') {
+                        if (offset + 8 + length <= byteArray.length) {
+                            const data = byteArray.slice(offset + 8, offset + 8 + length);
+                            
+                            try {
+                                const keywordLength = data.indexOf(0);
+                                if (keywordLength !== -1) {
+                                    const keyword = new TextDecoder('utf-8').decode(data.slice(0, keywordLength));
+                                    
+                                    let text = '';
+                                    if (type === 'tEXt') {
+                                        text = new TextDecoder('latin1').decode(data.slice(keywordLength + 1));
+                                    } else if (type === 'iTXt') {
+                                        const textStart = data.indexOf(0, keywordLength + 1);
+                                        if (textStart !== -1) {
+                                            text = new TextDecoder('utf-8').decode(data.slice(textStart + 1));
+                                        }
+                                    } else if (type === 'zTXt') {
+                                        text = new TextDecoder('latin1').decode(data.slice(keywordLength + 1));
+                                    }
+                                    
+                                    if (keyword && text) {
+                                        textChunks.push({ keyword, text, type });
+                                    }
+                                }
+                            } catch (decodeError) {
+                                console.warn(`error (${type}):`, decodeError);
+                            }
+                        }
+                    }
+                    
+                    offset += 8 + length + 4;
+                    
+                    if (length < 0 || length > byteArray.length) {
+                        break;
+                    }
+                    
+                } catch (error) {
+                    console.warn('error:', error);
+                    break;
+                }
+            }
+            
             return textChunks;
         }
 
         function formatMetadata(keyword, text) {
-            let formattedText = "";
-
-            const promptPattern = /(.*?)(?=Negative prompt:)/s;
-            const promptMatch = promptPattern.exec(text);
-            if (promptMatch) {
-                const promptValue = promptMatch[1].trim();
-                formattedText += `<p><strong>Prompt:</strong> ${promptValue}</p>`;
+            if (!keyword || (keyword !== 'parameters' && !keyword.toLowerCase().includes('param'))) {
+                return '';
             }
-
-            const negativePromptPattern = /Negative prompt: (.*?)(?=Steps:)/s;
-            const negativePromptMatch = negativePromptPattern.exec(text);
-            if (negativePromptMatch) {
-                const negativePromptValue = negativePromptMatch[1].trim();
-                formattedText += `<p><strong>Negative prompt:</strong> ${negativePromptValue}</p>`;
+            
+            let formattedHtml = "";
+            let hasValidData = false;
+            
+            try {
+                const promptPattern = /(.*?)(?=Negative prompt:|$)/s;
+                const promptMatch = promptPattern.exec(text);
+                if (promptMatch && promptMatch[1].trim()) {
+                    fullPromptText = promptMatch[1].trim();
+                    let promptValue = fullPromptText;
+                    if (promptValue.length > 150) {
+                        promptValue = promptValue.substring(0, 150) + '...';
+                    }
+                    formattedHtml += createMetadataItem('Prompt', promptValue, 'prompt', true);
+                    hasValidData = true;
+                }
+                
+                const negativePromptPattern = /Negative prompt:\s*(.*?)(?=Steps:|$)/s;
+                const negativePromptMatch = negativePromptPattern.exec(text);
+                if (negativePromptMatch && negativePromptMatch[1].trim()) {
+                    fullNegativePromptText = negativePromptMatch[1].trim();
+                    let negativePromptValue = fullNegativePromptText;
+                    if (negativePromptValue.length > 100) {
+                        negativePromptValue = negativePromptValue.substring(0, 100) + '...';
+                    }
+                    formattedHtml += createMetadataItem('Negative Prompt', negativePromptValue, 'negative-prompt', true);
+                    hasValidData = true;
+                }
+                
+                const importantParams = parseImportantParameters(text);
+                
+                const parameterOrder = ['Model', 'Size', 'Steps', 'Sampler', 'CFG scale', 'Seed'];
+                parameterOrder.forEach(paramName => {
+                    if (importantParams[paramName]) {
+                        formattedHtml += createMetadataItem(
+                            paramName, 
+                            importantParams[paramName], 
+                            'parameter'
+                        );
+                        hasValidData = true;
+                    }
+                });
+                
+                const loraInfo = extractLoraInfo(text);
+                if (loraInfo.length > 0) {
+                    const loraText = loraInfo.slice(0, 5).join(', ');
+                    const remainingCount = loraInfo.length > 5 ? ` and ${loraInfo.length} more` : '';
+                    formattedHtml += createMetadataItem('Lora', loraText + remainingCount, 'lora');
+                    hasValidData = true;
+                }
+                
+                const extensions = extractExtensionInfo(text);
+                if (extensions.length > 0) {
+                    const extText = extensions.slice(0, 2).join(', ');
+                    formattedHtml += createMetadataItem('Extensions', extText, 'extension');
+                    hasValidData = true;
+                }
+                
+                if (hasValidData) {
+                    formattedHtml += `<button class="show-details-button" onclick="showDetailModal()">ShowMore</button>`;
+                }
+                
+                window.currentMetadata = {
+                    parameters: text,
+                    keyword: keyword
+                };
+                
+            } catch (error) {
+                console.error('error:', error);
+                formattedHtml = '<div class="error">error: ' + error.message + '</div>';
             }
-
-            const restPattern = /(Steps:.*)/s;
-            const restMatch = restPattern.exec(text);
-            if (restMatch) {
-                const restText = restMatch[1];
-
-                const pattern = /(\w+(?: \w+)*): ([^,]+)(?:,|$)/g;
-                let match;
-
-                while ((match = pattern.exec(restText)) !== null) {
-                    const key = match[1].trim();
-                    const value = match[2].trim();
-                    formattedText += `<p><strong>${key}:</strong> ${value}</p>`;
+            
+            return formattedHtml;
+        }
+        
+        function parseImportantParameters(text) {
+            const params = {};
+            
+            const patterns = {
+                'Model': /Model:\s*([^,\n]+)/,
+                'Size': /Size:\s*([^,\n]+)/,
+                'Steps': /Steps:\s*([^,\n]+)/,
+                'Sampler': /Sampler:\s*([^,\n]+)/,
+                'CFG scale': /CFG scale:\s*([^,\n]+)/,
+                'Seed': /Seed:\s*([^,\n]+)/
+            };
+            
+            Object.keys(patterns).forEach(key => {
+                const match = patterns[key].exec(text);
+                if (match && match[1]) {
+                    params[key] = match[1].trim();
+                }
+            });
+            
+            return params;
+        }
+        
+        function extractLoraInfo(text) {
+            const loraPattern = /<lora:([^:>]+):[^>]*>/g;
+            const loras = [];
+            let match;
+            
+            while ((match = loraPattern.exec(text)) !== null) {
+                const loraName = match[1].trim();
+                if (loraName && !loras.includes(loraName)) {
+                    loras.push(loraName);
                 }
             }
-
-            return `<div>${formattedText}</div>`;
+            
+            return loras;
+        }
+        
+        function extractExtensionInfo(text) {
+            const extensions = [];
+            
+            const extensionPatterns = [
+                { name: 'ControlNet', pattern: /ControlNet/ },
+                { name: 'ADetailer', pattern: /ADetailer/ },
+                { name: 'TI Hash', pattern: /TI hash/ },
+                { name: 'Hires upscale', pattern: /Hires upscale/ },
+                { name: 'Face restoration', pattern: /Face restoration/ }
+            ];
+            
+            extensionPatterns.forEach(ext => {
+                if (ext.pattern.test(text)) {
+                    extensions.push(ext.name);
+                }
+            });
+            
+            return extensions;
+        }
+        
+        function createMetadataItem(label, value, type = 'default', showCopy = false) {
+            let copyButton = '';
+            if (showCopy) {
+                if (type === 'prompt') {
+                    copyButton = `<button class="copy-button" onclick="copyFullPrompt(this)">Copy</button>`;
+                } else if (type === 'negative-prompt') {
+                    copyButton = `<button class="copy-button" onclick="copyFullNegativePrompt(this)">Copy</button>`;
+                } else {
+                    copyButton = `<button class="copy-button" onclick="copyToClipboard('${escapeForAttribute(value)}', this)">Copy</button>`;
+                }
+            }
+            
+            const expandButton = (type === 'prompt' || type === 'negative-prompt') && value.includes('...') ? 
+                `<button class="copy-button" onclick="expandText(this)" style="margin-left: 5px;">Expand</button>` : '';
+            
+            return `
+                <div class="metadata-item">
+                    <span class="metadata-label">${label}${copyButton}${expandButton}</span>
+                    <div class="metadata-value ${type}">${escapeHtml(value)}</div>
+                </div>
+            `;
+        }
+        
+        function formatParameterName(key) {
+            const nameMap = {
+                'Steps': 'Generation Steps',
+                'Sampler': 'Sampling Method',
+                'CFG scale': 'Prompt Relevance',
+                'Seed': 'Random Seed',
+                'Size': 'Image Size',
+                'Model': 'Model Used',
+                'Model hash': 'Model Hash',
+                'Denoising strength': 'Denoising Strength',
+                'Clip skip': 'CLIP Skip Layers',
+                'ENSD': 'Noise Seed Enhancement'
+            };
+            
+            return nameMap[key] || key;
+        }
+        
+        function getParameterIcon(key) {
+            const iconMap = {
+                '生成步数': '🔄',
+                '采样方法': '🎲',
+                '提示词相关性': '🎯',
+                '随机种子': '🌱',
+                '图像尺寸': '📐',
+                '使用模型': '🤖',
+                '模型哈希': '#️⃣',
+                '去噪强度': '🔧',
+                'CLIP跳过层数': '⏭️',
+                '噪声种子增强': '🔀'
+            };
+            
+            return iconMap[key] || '⚙️';
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function escapeForAttribute(text) {
+            return text.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+        }
+        
+        function copyToClipboard(text, button) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = text;
+            const cleanText = tempDiv.textContent || tempDiv.innerText || '';
+            
+            navigator.clipboard.writeText(cleanText).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.classList.add('copied');
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('Copy failed, please select text manually');
+            });
+        }
+        
+        function copyFullPrompt(button) {
+            const textToCopy = fullPromptText || '';
+            
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.classList.add('copied');
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('Copy failed, please select text manually');
+            });
+        }
+        
+        function copyFullNegativePrompt(button) {
+            const textToCopy = fullNegativePromptText || '';
+            
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalText = button.textContent;
+                button.textContent = 'Copied!';
+                button.classList.add('copied');
+                
+                setTimeout(() => {
+                    button.textContent = originalText;
+                    button.classList.remove('copied');
+                }, 2000);
+            }).catch(err => {
+                console.error('Copy failed:', err);
+                alert('Copy failed, please select text manually');
+            });
+        }
+        
+        let fullPromptText = '';
+        let fullNegativePromptText = '';
+        
+        function expandText(button) {
+            const metadataItem = button.closest('.metadata-item');
+            const valueDiv = metadataItem.querySelector('.metadata-value');
+            const label = metadataItem.querySelector('.metadata-label').textContent;
+            
+            if (button.textContent === 'Expand') {
+                if (label.includes('Prompt') && fullPromptText) {
+                    valueDiv.textContent = fullPromptText;
+                } else if (label.includes('Negative Prompt') && fullNegativePromptText) {
+                    valueDiv.textContent = fullNegativePromptText;
+                }
+                button.textContent = 'Collapse';
+            } else {
+                if (label.includes('Prompt') && fullPromptText) {
+                    const shortText = fullPromptText.length > 150 ? 
+                        fullPromptText.substring(0, 150) + '...' : fullPromptText;
+                    valueDiv.textContent = shortText;
+                } else if (label.includes('Negative Prompt') && fullNegativePromptText) {
+                    const shortText = fullNegativePromptText.length > 100 ? 
+                        fullNegativePromptText.substring(0, 100) + '...' : fullNegativePromptText;
+                    valueDiv.textContent = shortText;
+                }
+                button.textContent = 'Expand';
+            }
+        }
+        
+        function showDetailModal() {
+            const modal = document.getElementById('detailModal');
+            const modalBody = document.querySelector('.modal-body');
+            
+            modalBody.innerHTML = '';
+            
+            const allParams = getAllParameters();
+            
+            if (Object.keys(allParams).length === 0) {
+                modalBody.innerHTML = '<p>No detailed parameters available.</p>';
+                modal.style.display = 'block';
+                return;
+            }
+            
+            const container = document.createElement('div');
+            container.className = 'detail-grid';
+            
+            const groups = {
+                'Basic Parameters': [
+                    'Steps', 'Sampler', 'Schedule type', 'CFG scale', 'Seed', 'Size', 
+                    'Model', 'Model hash', 'VAE', 'Clip skip', 'ENSD'
+                ],
+                'High-Resolution': [
+                    'Hires upscale', 'Hires steps', 'Hires upscaler', 'Hires CFG Scale',
+                    'Hires Module 1', 'Denoising strength'
+                ],
+                'ADetailer': [],
+                'ControlNet': [],
+                'LoRA & Embeddings': [
+                    'Lora hashes', 'TI'
+                ],
+                'Other Extensions': [
+                    'Version', 'Hashes'
+                ]
+            };
+            
+            for (const key in allParams) {
+                let found = false;
+                for (const groupKeys of Object.values(groups)) {
+                    if (Array.isArray(groupKeys) && groupKeys.includes(key)) {
+                        found = true;
+                        break;
+                    }
+                }
+                
+                if (found) continue;
+                
+                if (key.toLowerCase().includes('adetailer')) {
+                    groups.ADetailer.push(key);
+                } else if (key.toLowerCase().includes('controlnet')) {
+                    groups.ControlNet.push(key);
+                } else if (key.toLowerCase().includes('lora') || key.toLowerCase().includes('ti')) {
+                    groups['LoRA & Embeddings'].push(key);
+                } else if (key.toLowerCase().includes('hires')) {
+                    groups['High-Resolution'].push(key);
+                } else {
+                    groups['Other Extensions'].push(key);
+                }
+            }
+            
+            for (const [groupName, keys] of Object.entries(groups)) {
+                const relevantKeys = keys.filter(key => allParams[key]);
+                if (relevantKeys.length === 0) continue;
+                
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'param-group';
+                
+                const groupTitle = document.createElement('h4');
+                groupTitle.textContent = groupName;
+                groupDiv.appendChild(groupTitle);
+                
+                relevantKeys.forEach(key => {
+                    const paramDiv = document.createElement('div');
+                    paramDiv.className = 'param-item';
+                    
+                    const label = document.createElement('div');
+                    label.className = 'param-label';
+                    label.textContent = key;
+                    
+                    const value = document.createElement('div');
+                    value.className = 'param-value';
+                    value.textContent = allParams[key];
+                    
+                    paramDiv.appendChild(label);
+                    paramDiv.appendChild(value);
+                    groupDiv.appendChild(paramDiv);
+                });
+                
+                container.appendChild(groupDiv);
+            }
+            
+            modalBody.appendChild(container);
+            modal.style.display = 'block';
+        }
+        
+        function closeDetailModal() {
+            const modal = document.getElementById('detailModal');
+            modal.style.display = 'none';
+        }
+        
+        function getAllParameters() {
+            if (!window.currentMetadata) return {};
+            
+            const allParams = {};
+            
+            if (window.currentMetadata.parameters) {
+                const text = window.currentMetadata.parameters;
+                
+                const stepIndex = text.indexOf('Steps:');
+                if (stepIndex !== -1) {
+                    const parameterString = text.substring(stepIndex);
+                    
+                    const items = [];
+                    let current = '';
+                    let braceLevel = 0;
+                    let quoteLevel = 0;
+                    
+                    for (let i = 0; i < parameterString.length; i++) {
+                        const char = parameterString[i];
+                        
+                        if (char === '"') {
+                            quoteLevel = 1 - quoteLevel;
+                        } else if (char === '{' && quoteLevel === 0) {
+                            braceLevel++;
+                        } else if (char === '}' && quoteLevel === 0) {
+                            braceLevel--;
+                        } else if (char === ',' && braceLevel === 0 && quoteLevel === 0) {
+                            if (current.trim()) {
+                                items.push(current.trim());
+                            }
+                            current = '';
+                            continue;
+                        }
+                        
+                        current += char;
+                    }
+                    
+                    if (current.trim()) {
+                        items.push(current.trim());
+                    }
+                    
+                    items.forEach(item => {
+                        const colonIndex = item.indexOf(':');
+                        if (colonIndex > 0) {
+                            const key = item.substring(0, colonIndex).trim();
+                            const value = item.substring(colonIndex + 1).trim();
+                            
+                            if (key && value) {
+                                allParams[key] = value;
+                            }
+                        }
+                    });
+                }
+            }
+            
+            ['model', 'vae', 'workflow'].forEach(key => {
+                if (window.currentMetadata[key]) {
+                    allParams[key.charAt(0).toUpperCase() + key.slice(1)] = window.currentMetadata[key];
+                }
+            });
+            
+            return allParams;
+        }
+        
+        window.onclick = function(event) {
+            const modal = document.getElementById('detailModal');
+            if (event.target == modal) {
+                modal.style.display = 'none';
+            }
         }
     </script>
 </body>
