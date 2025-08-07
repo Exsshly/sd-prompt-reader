@@ -483,7 +483,7 @@
         
         <div id="metadataContainer">
             <div class="metadata-tabs">
-                <button class="tab-button active" onclick="switchTab('formatted')">FormattedInfo</button>
+                <button class="tab-button active" onclick="switchTab('formatted')">Formatted</button>
                 <button class="tab-button" onclick="switchTab('raw')">RawInfo</button>
             </div>
             
@@ -493,7 +493,7 @@
             
             <div id="rawTab" class="tab-content">
                 <div class="metadata-section">
-                    <h2>RawInfo</h2>
+                    <h2>RawData</h2>
                     <pre id="rawMetadataContent">nil</pre>
                 </div>
             </div>
@@ -644,6 +644,12 @@
             const rawMetadataContent = document.getElementById('rawMetadataContent');
             const formattedMetadataContent = document.getElementById('formattedMetadataContent');
             
+            formattedMetadataContent.innerHTML = '';
+            rawMetadataContent.textContent = '';
+            fullPromptText = '';
+            fullNegativePromptText = '';
+            window.currentMetadata = null;
+            
             try {
                 const textChunks = findPNGTextChunks(byteArray);
                 
@@ -678,6 +684,7 @@
                 console.error('error:', error);
                 const errorMsg = 'error: ' + error.message;
                 rawMetadataContent.textContent = errorMsg;
+                formattedMetadataContent.innerHTML = '<div class="error">error: ' + error.message + '</div>';
             }
         }
 
